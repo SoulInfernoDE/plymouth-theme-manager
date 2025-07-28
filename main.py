@@ -8,9 +8,9 @@ import tempfile
 import subprocess
 import tarfile
 import json
+import shutil
 
-# Pfad zur zentralen Theme-Liste auf GitHub
-THEME_LIST_URL = "https://raw.githubusercontent.com/SoulInfernoDE/plymouth-theme-manager/main/plymouth_theme_manager/themes.json"
+THEME_LIST_URL = "https://raw.githubusercontent.com/SoulInfernoDE/plymouth-theme-manager/refs/heads/main/plymouth_theme_manager/themes.json?token=GHSAT0AAAAAADIEEW36CO5DWG7BYRJKSBSW2EG53RA"
 THEME_DIR = "/usr/share/plymouth/themes/"
 
 class Theme:
@@ -73,23 +73,36 @@ class ThemeManager(Gtk.Window):
             tmp.flush()
 
             with tempfile.TemporaryDirectory() as tmpd:
+                # Entpacke Archiv
                 tarfile.open(tmp.name).extractall(path=tmpd)
-                sub = next(os.walk(tmpd))[1][0]
-                src = os.path.join(tmpd, sub)
-                dst = os.path.join(THEME_DIR, theme.name)
-                subprocess.run(["sudo", "mkdir", "-p", dst])
-                subprocess.run(["sudo", "cp", "-r", src + "/.", dst])
+                # Suche nach .plymouth Datei
+                plymouth_file = None
+                for root, _, files in os.walk(tmpd):
+                    for file in files:
+                        if file.endswith(".plymouth"):
+                            plymouth_file = os.path.join(root, file)
+                            break
+                if not plymouth_file:
+                    raise Exception("Keine .plymouth-Datei im Theme gefunden.")
 
-                ply = next(f for f in os.listdir(dst) if f.endswith(".plymouth"))
-                full = os.path.join(dst, ply)
+                # Zielordnername aus Dateiname ableiten
+                theme_basename = os.path.splitext(os.path.basename(plymouth_file))[0]
+                target_dir = os.path.join(THEME_DIR, theme_basename)
+
+                # Kopiere Dateien
+                subprocess.run(["sudo", "mkdir", "-p", target_dir])
+                subprocess.run(["sudo", "cp", "-r", os.path.dirname(plymouth_file) + "/.", target_dir])
+
+                # Theme als Standard setzen
+                full_ply_path = os.path.join(target_dir, f"{theme_basename}.plymouth")
                 subprocess.run(["sudo", "update-alternatives", "--install",
                                 "/usr/share/plymouth/themes/default.plymouth",
-                                "default.plymouth", full, "100"])
+                                "default.plymouth", full_ply_path, "100"])
                 subprocess.run(["sudo", "update-alternatives", "--set",
-                                "default.plymouth", full])
+                                "default.plymouth", full_ply_path])
                 subprocess.run(["sudo", "update-initramfs", "-u"])
 
-            self.show_info(f"Theme '{theme.name}' installiert.")
+            self.show_info(f"Theme '{theme_basename}' installiert und aktiviert.")
         except Exception as e:
             self.show_error(f"Fehler: {e}")
 
