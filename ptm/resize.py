@@ -1,30 +1,36 @@
+import os
 from PIL import Image
-import io
+from io import BytesIO
+import requests
 
-def scale_gif_bytes(gif_bytes, target_height):
+SCALED_DIR = "/usr/share/icons/animated/themes"
+
+def get_or_create_scaled_gif(theme_name, preview_url):
+    os.makedirs(SCALED_DIR, exist_ok=True)
+    gif_path = os.path.join(SCALED_DIR, f"{theme_name}_preview.gif")
+
+    if os.path.exists(gif_path):
+        return gif_path
+
+    response = requests.get(preview_url)
+    response.raise_for_status()
+
+    img_bytes = BytesIO(response.content)
     try:
-        with Image.open(io.BytesIO(gif_bytes)) as img:
-            frames = []
-            for frame in range(0, img.n_frames):
-                img.seek(frame)
-                frame_img = img.copy()
-                scale = target_height / frame_img.height
-                new_width = int(frame_img.width * scale)
-                frame_img = frame_img.resize((new_width, target_height), Image.ANTIALIAS)
-                frames.append(frame_img.convert("RGBA"))
+        img = Image.open(img_bytes)
+        frames = []
+        for frame in range(img.n_frames):
+            img.seek(frame)
+            frame_img = img.copy()
+            frame_img = frame_img.convert("RGBA")
+            ratio = 192 / img.height
+            new_width = int(img.width * ratio)
+            frame_img = frame_img.resize((new_width, 192), Image.LANCZOS)
+            frames.append(frame_img)
 
-            output_bytes = io.BytesIO()
-            frames[0].save(
-                output_bytes,
-                format="GIF",
-                save_all=True,
-                append_images=frames[1:],
-                loop=0,
-                transparency=0,
-                disposal=2,
-            )
-            return output_bytes.getvalue()
+        frames[0].save(gif_path, save_all=True, append_images=frames[1:], loop=0, duration=img.info.get('duration', 100))
+        return gif_path
     except Exception as e:
         print("Fehler bei GIF-Skalierung:", e)
-        return None
+        raise
 

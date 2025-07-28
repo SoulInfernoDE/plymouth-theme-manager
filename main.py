@@ -1,141 +1,158 @@
 import gi
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GdkPixbuf, GLib
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GdkPixbuf
 
 import os
-import json
-import threading
 import requests
+import json
+from ptm.resize import get_or_create_scaled_gif
 
-from ptm import config
-from ptm import theme_handler
-from ptm import resize
+APP_ICON_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'icon.png')
+CONFIG_DIR = "/usr/share/plymouth/themes_manager"
+CONFIG_FILE = os.path.join(CONFIG_DIR, "ptm.conf")
+LOCAL_THEME_CACHE = os.path.join(CONFIG_DIR, "themes.json")
+THEMES_JSON_URL = "https://raw.githubusercontent.com/SoulInfernoDE/plymouth-theme-manager/refs/heads/main/plymouth_theme_manager/themes.json"
 
-THEMES_URL = "https://raw.githubusercontent.com/SoulInfernoDE/plymouth-theme-manager/refs/heads/main/plymouth_theme_manager/themes.json"
-LOCAL_THEMES_PATH = "/usr/share/plymouth/themes_manager/themes.json"
-ANIMATED_THEMES_DIR = "/usr/share/icons/animated/themes"
-
-class ThemeRow(Gtk.ListBoxRow):
-    def __init__(self, theme_data, installed_themes, install_callback):
-        super().__init__()
-        self.theme = theme_data
-        self.installed_themes = installed_themes
-        self.install_callback = install_callback
-        self.set_margin_top(6)
-        self.set_margin_bottom(6)
-        self.set_margin_start(6)
-        self.set_margin_end(6)
-
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.add(vbox)
-
-        # Name über dem Bild zentriert
-        label = Gtk.Label(label=theme_data.get("name", "Unbekannt"))
-        label.set_halign(Gtk.Align.CENTER)
-        vbox.pack_start(label, False, False, 0)
-
-        # Bild
-        self.image = Gtk.Image()
-        vbox.pack_start(self.image, False, False, 0)
-
-        # Button "Installieren" zentriert
-        self.install_btn = Gtk.Button(label="Installieren")
-        self.install_btn.set_halign(Gtk.Align.CENTER)
-        self.install_btn.connect("clicked", self.on_install_clicked)
-        vbox.pack_start(self.install_btn, False, False, 0)
-
-        self.load_preview()
-
-    def load_preview(self):
-        url = self.theme.get("preview_url", "")
-        if not url:
-            self.image.set_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
-            return
-
-        def download_and_scale():
-            try:
-                r = requests.get(url, timeout=10)
-                r.raise_for_status()
-                data = r.content
-
-                # Wenn GIF, skalieren mit Pillow
-                if url.lower().endswith(".gif"):
-                    scaled_bytes = resize.scale_gif_bytes(data, target_height=192)
-                    if scaled_bytes:
-                        # In temporäre Datei speichern (fixes Problem mit Animation)
-                        temp_path = os.path.join(ANIMATED_THEMES_DIR, f"{self.theme['name']}.gif")
-                        os.makedirs(ANIMATED_THEMES_DIR, exist_ok=True)
-                        with open(temp_path, "wb") as f:
-                            f.write(scaled_bytes)
-
-                        GLib.idle_add(self.set_animation_from_file, temp_path)
-                    else:
-                        GLib.idle_add(self.image.set_from_icon_name, "image-missing", Gtk.IconSize.DIALOG)
-                else:
-                    loader = GdkPixbuf.PixbufLoader.new_with_type("png")
-                    loader.write(data)
-                    loader.close()
-                    pixbuf = loader.get_pixbuf()
-                    scale = 192 / pixbuf.get_height()
-                    width = int(pixbuf.get_width() * scale)
-                    scaled = pixbuf.scale_simple(width, 192, GdkPixbuf.InterpType.BILINEAR)
-                    GLib.idle_add(self.image.set_from_pixbuf, scaled)
-            except Exception as e:
-                print("Bild konnte nicht geladen werden:", e)
-                GLib.idle_add(self.image.set_from_icon_name, "image-missing", Gtk.IconSize.DIALOG)
-
-        threading.Thread(target=download_and_scale, daemon=True).start()
-
-    def set_animation_from_file(self, filepath):
-        try:
-            animation = GdkPixbuf.PixbufAnimation.new_from_file(filepath)
-            self.image.set_from_animation(animation)
-        except Exception as e:
-            print("Fehler PixbufAnimation:", e)
-            self.image.set_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
-
-    def on_install_clicked(self, button):
-        success = theme_handler.install_theme(
-            self.theme.get("name"),
-            self.theme.get("theme_url")
-        )
-        if success:
-            dialog = Gtk.MessageDialog(
-                transient_for=self.get_toplevel(),
-                flags=0,
-                message_type=Gtk.MessageType.INFO,
-                buttons=Gtk.ButtonsType.OK,
-                text=f"Theme '{self.theme.get('name')}' wurde erfolgreich installiert.",
-            )
-            dialog.run()
-            dialog.destroy()
-        else:
-            dialog = Gtk.MessageDialog(
-                transient_for=self.get_toplevel(),
-                flags=0,
-                message_type=Gtk.MessageType.ERROR,
-                buttons=Gtk.ButtonsType.CLOSE,
-                text=f"Fehler bei der Installation von '{self.theme.get('name')}'.",
-            )
-            dialog.run()
-            dialog.destroy()
-
-        if self.install_callback:
-            self.install_callback()
 
 class ThemeManager(Gtk.Window):
     def __init__(self):
         super().__init__(title="Plymouth Theme Manager")
-        self.set_default_size(640, 480)
-        self.set_border_width(12)
+        self.set_default_size(800, 600)
+        self.set_icon_from_file(APP_ICON_PATH)
 
-        self.ensure_dirs()
-
-        self.config = config.load_config()
-        self.installed_themes = theme_handler.get_installed_themes()
-
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        # Hauptlayout
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(vbox)
 
-        self.list
+        # Menüleiste
+        menubar = Gtk.MenuBar()
+        vbox.pack_start(menubar, False, False, 0)
+
+        # Menü: Aktionen
+        aktionen_menu = Gtk.Menu()
+        aktionen_item = Gtk.MenuItem(label="Aktionen")
+        aktionen_item.set_submenu(aktionen_menu)
+
+        install_item = Gtk.MenuItem(label="Installieren")
+        install_item.connect("activate", self.on_install_view)
+        aktionen_menu.append(install_item)
+
+        uninstall_item = Gtk.MenuItem(label="Deinstallieren")
+        uninstall_item.connect("activate", self.on_uninstall_view)
+        aktionen_menu.append(uninstall_item)
+
+        change_item = Gtk.MenuItem(label="Theme ändern")
+        change_item.connect("activate", self.on_change_view)
+        aktionen_menu.append(change_item)
+
+        # Menü: Hilfe
+        help_menu = Gtk.Menu()
+        help_item = Gtk.MenuItem(label="Hilfe")
+        help_item.set_submenu(help_menu)
+
+        about_item = Gtk.MenuItem(label="Über")
+        about_item.connect("activate", self.on_about)
+        help_menu.append(about_item)
+
+        menubar.append(aktionen_item)
+        menubar.append(help_item)
+
+        # Stack für verschiedene Ansichten
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        self.stack.set_transition_duration(300)
+        vbox.pack_start(self.stack, True, True, 0)
+
+        # Installieren-Ansicht
+        self.install_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.stack.add_titled(self.install_box, "install", "Installieren")
+
+        self.theme_listbox = Gtk.ListBox()
+        self.install_box.pack_start(self.theme_listbox, True, True, 0)
+
+        icon = Gtk.Image.new_from_file(APP_ICON_PATH)
+        icon.set_halign(Gtk.Align.CENTER)
+        self.install_box.pack_end(icon, False, False, 10)
+
+        self.load_themes()
+
+    def on_install_view(self, widget):
+        self.stack.set_visible_child_name("install")
+
+    def on_uninstall_view(self, widget):
+        print("Uninstall View – noch nicht implementiert")
+
+    def on_change_view(self, widget):
+        print("Change View – noch nicht implementiert")
+
+    def on_about(self, widget):
+        dialog = Gtk.AboutDialog()
+        dialog.set_program_name("Plymouth Theme Manager")
+        dialog.set_version("1.0")
+        dialog.set_website("https://github.com/SoulInfernoDE/plymouth-theme-manager")
+        dialog.set_website_label("Projekt auf GitHub")
+        dialog.set_comments("Open Source Software von SoulInfernoDE\nIcons von https://icons8.de")
+        dialog.set_logo(Gtk.Image.new_from_file(APP_ICON_PATH).get_pixbuf())
+        dialog.set_transient_for(self)
+        dialog.run()
+        dialog.destroy()
+
+    def load_themes(self):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        try:
+            r = requests.get(THEMES_JSON_URL)
+            r.raise_for_status()
+            with open(LOCAL_THEME_CACHE, "w") as f:
+                f.write(r.text)
+        except Exception as e:
+            print("Fehler beim Herunterladen der themes.json:", e)
+
+        try:
+            with open(LOCAL_THEME_CACHE, "r") as f:
+                themes = json.load(f)
+        except Exception as e:
+            print("Fehler beim Laden der themes.json:", e)
+            themes = []
+
+        for theme in themes:
+            self.add_theme_row(theme)
+
+    def add_theme_row(self, theme):
+        name = theme.get("name")
+        preview_url = theme.get("preview_url")
+        theme_url = theme.get("theme_url")
+
+        row = Gtk.ListBoxRow()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=10)
+        row.add(box)
+
+        label = Gtk.Label(label=name)
+        label.set_xalign(0.5)
+        box.pack_start(label, False, False, 0)
+
+        image = Gtk.Image()
+        try:
+            scaled_path = get_or_create_scaled_gif(name, preview_url)
+            anim = GdkPixbuf.PixbufAnimation.new_from_file(scaled_path)
+            image.set_from_animation(anim)
+        except Exception as e:
+            print("Bild konnte nicht geladen werden:", e)
+            image.set_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
+
+        image.set_halign(Gtk.Align.CENTER)
+        box.pack_start(image, False, False, 0)
+
+        self.theme_listbox.add(row)
+        self.theme_listbox.show_all()
+
+
+def main():
+    win = ThemeManager()
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()
 
