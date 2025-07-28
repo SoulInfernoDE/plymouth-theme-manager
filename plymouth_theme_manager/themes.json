@@ -4,6 +4,13 @@
     "description": "Portierte Bootanimations‑Serie von adi1090x",
     "theme_url": "https://github.com/adi1090x/plymouth-themes/releases/download/v1.0/black_hud.tar.gz",
     "preview_url": "https://raw.githubusercontent.com/adi1090x/files/master/plymouth-themes/previews/6.gif"
+  },
+  
+  {
+    "name": "Colorful Loop",
+    "description": "Portierte Bootanimations‑Serie von adi1090x",
+    "theme_url": "https://github.com/adi1090x/plymouth-themes/releases/download/v1.0/colorful_loop.tar.gz",
+    "preview_url": "https://raw.githubusercontent.com/adi1090x/files/master/plymouth-themes/previews/14.gif"
   }
 ]
 
