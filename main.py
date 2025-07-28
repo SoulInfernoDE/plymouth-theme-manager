@@ -10,7 +10,7 @@ import tarfile
 import json
 
 APP_ICON = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
-THEME_LIST_URL = "https://raw.githubusercontent.com/SoulInfernoDE/plymouth-theme-manager/main/plymouth_theme_manager/themes.json"
+THEME_LIST_URL = "https://raw.githubusercontent.com/SoulInfernoDE/plymouth-theme-manager/refs/heads/main/plymouth_theme_manager/themes.json"
 THEME_DIR = "/usr/share/plymouth/themes/"
 
 class Theme:
