@@ -1,0 +1,13 @@
+Source: plymouth-theme-manager
+Section: utils
+Priority: optional
+Maintainer: SoulInfernoDE <SoulInfernoDE@users.noreply.github.com>
+Build-Depends: debhelper (>= 11), python3, python3-gi, gir1.2-gtk-3.0
+Standards-Version: 4.1.4
+
+Package: plymouth-theme-manager
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-gi, gir1.2-gtk-3.0
+Description: GUI-Installer für Plymouth-Themes
+ Grafische Oberfläche zum Herunterladen und Installieren von Plymouth-Themes.
+

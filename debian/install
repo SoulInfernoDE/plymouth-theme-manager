@@ -1,0 +1,3 @@
+main.py usr/bin/plymouth-theme-manager
+assets icon.png usr/share/plymouth-theme-manager/
+
