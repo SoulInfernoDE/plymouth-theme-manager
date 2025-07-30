@@ -1,4 +1,4 @@
-# Plymouth Theme Manager
+# Plymouth Theme Manager [STATE: WORK-IN-PROGRESS]
 
 ![Screenshot](assets/icon.png)
 
