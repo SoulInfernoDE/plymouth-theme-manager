@@ -26,4 +26,5 @@
 sudo apt install python3 python3-gi gir1.2-gtk-3.0
 
 
-Das Icon stammt von https://icons8.de
+The 2D Icon: 2D_tux.png is from https://icons8.de
+The 3D icon: loading_and_surfing_tux.png is ' (c) ' 2025 SoulInfernoDE - If you want to use this icon you need to link to this project and ask for permission in this projects issue page
